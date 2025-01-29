@@ -2,18 +2,39 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import pandas as pd
-from tqdm import tqdm  # Import tqdm for the progress bar
+from tqdm import tqdm
+from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET
 
-class WebScraper:
-    def __init__(self, df):
+class RSSWebScraper:
+    def __init__(self, rss_urls):
         """
-        Initializes the WebScraper class.
+        Initializes the RSSWebScraper class.
         
         Args:
-        df (pandas.DataFrame): DataFrame containing URLs to scrape.
+        rss_urls (list of tuples): List of RSS feed URLs and corresponding categories.
         """
-        self.df = df
+        self.rss_urls = rss_urls
+        self.df = pd.DataFrame(columns=["url", "category"])  # Empty DataFrame to store article URLs and categories
         self.scraped_data = []
+
+    def fetch_rss_data(self):
+        """Fetch and parse all RSS feeds to extract article URLs and their corresponding categories."""
+        for rss_url, category in tqdm(self.rss_urls, desc="Processing RSS Feeds", unit="feed"):
+            response = requests.get(rss_url)
+            if response.status_code == 200:
+                # Parse RSS data
+                root = ET.fromstring(response.text)
+                new_rows = []
+                for item in root.findall(".//item"):
+                    link = item.find("link").text
+                    if link:
+                        new_rows.append({"url": link, "category": category})
+                # Concatenate new rows to the existing DataFrame
+                if new_rows:
+                    self.df = pd.concat([self.df, pd.DataFrame(new_rows)], ignore_index=True)
+            else:
+                print(f"Failed to fetch RSS feed from {rss_url}. Status code: {response.status_code}")
 
     def scrape_url(self, url):
         """
@@ -30,24 +51,10 @@ class WebScraper:
             response = requests.get(url)
             soup = BeautifulSoup(response.content, 'html.parser')
 
-            # Check if the page has an article section
-            main_content = soup.find('article')  # This might change based on the site you're scraping
-            if not main_content:
-                print(f"Skipping {url}: No article found.")
-                return {
-                    'url': url,
-                    'title': "No article found",
-                    'meta_description': "No article found",
-                    'author': "No article found",
-                    'published_time': "No article found",
-                    'headline': "No article found",
-                    'main_content': "No article found"
-                }
-
-            # Extract the title
+            # Extract title
             title = soup.title.string.strip() if soup.title else "No title found"
 
-            # Extract the meta description
+            # Extract meta description
             meta_tag = soup.find('meta', attrs={'name': 'description'})
             meta_content = meta_tag['content'].strip() if meta_tag and 'content' in meta_tag.attrs else "No meta description found"
 
@@ -65,6 +72,7 @@ class WebScraper:
             headline = meta_headline_tag.get('content', 'No headline found')
 
             # Extract main content
+            main_content = soup.find('article')  # Find main content of article
             text_content = main_content.get_text(strip=True) if main_content else "No main content found."
 
             # Return extracted data as a dictionary
@@ -91,34 +99,25 @@ class WebScraper:
             }
 
     def scrape_all_urls(self):
-        """
-        Scrapes all URLs from the DataFrame and stores the results.
-
-        Returns:
-        pandas.DataFrame: DataFrame with extracted content for each URL.
-        """
-        for idx, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Scraping URLs"):
+        """Scrapes all URLs from the DataFrame and stores the results."""
+        for idx, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Scraping URLs", unit="article"):
             url = row['url']
             print(f"Scraping URL: {url}")
             data = self.scrape_url(url)
             self.scraped_data.append(data)
-        
-        # Convert the collected data into a DataFrame
-        return pd.DataFrame(self.scraped_data)
 
-    @staticmethod
-    def extract_df(df):
-        """
-        Filters the DataFrame to only include articles published yesterday.
-        
-        Args:
-        df (pandas.DataFrame): The DataFrame containing scraped data.
-
-        Returns:
-        pandas.DataFrame: The filtered DataFrame containing only yesterday's articles.
-        """
+    def extract_df(self):
+        """Filters the DataFrame to only include articles published yesterday."""
+        # Filter for yesterday's articles
         yesterday = datetime.now().date() - timedelta(days=1)
-        df['published_time'] = pd.to_datetime(df['published_time'], errors='coerce')
-        filtered_df = df[df['published_time'].dt.date == yesterday]
+        result_df = pd.DataFrame(self.scraped_data)
+        result_df['published_time'] = pd.to_datetime(result_df['published_time'], errors='coerce')
+        filtered_df = result_df[result_df['published_time'].dt.date == yesterday]
 
         return filtered_df
+
+    def get_filtered_df(self):
+        """Fetch and scrape RSS data, then return the filtered DataFrame."""
+        self.fetch_rss_data()  # Fetch the RSS data
+        self.scrape_all_urls()  # Scrape all the URLs
+        return self.extract_df()  # Filter and return articles from yesterday
