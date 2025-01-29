@@ -32,7 +32,7 @@ def main():
         
         # Save the filtered DataFrame as a JSON file to be pushed to GitHub
         file_path = f'processed_files/guardian_articles_{yesterday}.json'
-        result_dict = filtered_articles.convert_to_json(df_filtered, file_path)
+        result_dict = scraper.convert_to_json(filtered_df, file_path)
 
         return result_dict  # Return the dictionary
 
