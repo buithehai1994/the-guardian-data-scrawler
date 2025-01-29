@@ -3,38 +3,46 @@ from bs4 import BeautifulSoup
 import json
 import pandas as pd
 from tqdm import tqdm
-from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 
-class RSSWebScraper:
-    def __init__(self, rss_urls):
-        """
-        Initializes the RSSWebScraper class.
-        
-        Args:
-        rss_urls (list of tuples): List of RSS feed URLs and corresponding categories.
-        """
-        self.rss_urls = rss_urls
-        self.df = pd.DataFrame(columns=["url", "source", "category"])  # Added category column
-        self.scraped_data = []
+class RSSParser:
+    def __init__(self, rss_url, category):
+        self.rss_url = rss_url
+        self.category = category
+        self.rss_data = None
+        self.items = []
 
     def fetch_rss_data(self):
-        """Fetch and parse all RSS feeds to extract article URLs, sources, and categories."""
-        for rss_url, category in tqdm(self.rss_urls, desc="Processing RSS Feeds", unit="feed"):
-            response = requests.get(rss_url)
-            if response.status_code == 200:
-                # Parse RSS data
-                root = ET.fromstring(response.text)
-                new_rows = []
-                for item in root.findall(".//item"):
-                    link = item.find("link").text
-                    if link:
-                        new_rows.append({"url": link, "source": rss_url, "category": category})  # Store both source and category
-                # Concatenate new rows to the existing DataFrame
-                if new_rows:
-                    self.df = pd.concat([self.df, pd.DataFrame(new_rows)], ignore_index=True)
-            else:
-                print(f"Failed to fetch RSS feed from {rss_url}. Status code: {response.status_code}")
+        """Fetch the RSS feed from the provided URL."""
+        try:
+            response = requests.get(self.rss_url)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            self.rss_data = response.text
+            print(f"Successfully fetched RSS data from {self.rss_url}")
+        except requests.RequestException as e:
+            print(f"Failed to fetch RSS feed from {self.rss_url}. Error: {e}")
+
+    def parse_rss_data(self):
+        """Parse the RSS data to extract article URLs and assign categories."""
+        if self.rss_data:
+            # Parse the XML data from the fetched RSS feed
+            root = ET.fromstring(self.rss_data)
+
+            # Find all the 'item' elements in the RSS feed
+            for item in root.findall(".//item"):
+                link = item.find("link").text
+                if link:
+                    # Append the URL and category to the items list
+                    self.items.append({
+                        "url": link,
+                        "category": self.category,  # Add category
+                        "rss": self.rss_url
+                    })
+            print(f"Parsed {len(self.items)} article URLs from {self.rss_url}")
+    
+    def get_articles(self):
+        """Return the list of article URLs and their corresponding categories."""
+        return pd.DataFrame(self.items)  # Return as a DataFrame
 
     def scrape_url(self, url, source, category):
         """
@@ -63,7 +71,12 @@ class RSSWebScraper:
             # Extract author from JSON-LD
             script_tag = soup.find('script', type='application/ld+json')
             json_data = json.loads(script_tag.string) if script_tag else {}
-            author_name = json_data[0]['author'][0]['name'] if 'author' in json_data[0] else "No author found"
+            author_name = json_data[0]['author'][0]['name'] if 'author' in json_data[0] else None
+
+            # If the JSON-LD author is missing, try extracting from meta tags
+            if not author_name:
+                author_tag = soup.find('meta', attrs={'name': 'author'})
+                author_name = author_tag['content'] if author_tag else "No author found"
 
             # Extract published time
             meta_time_tag = soup.find('meta', property='article:published_time')
@@ -77,14 +90,14 @@ class RSSWebScraper:
             main_content = soup.find('article')  # Find main content of article
             text_content = main_content.get_text(strip=True) if main_content else "No main content found."
 
-            # Return extracted data as a dictionary
+            # Return extracted data as a dictionary, ensuring a single author column
             return {
                 'url': url,
                 'source': source,
                 'type': category,  # Include the category
                 'title': title,
                 'description': meta_content,
-                'Author': author_name,
+                'Author': author_name,  # Use only one 'Author' column
                 'Date Published': published_time,
                 'Headline': headline,
                 'Content': text_content
@@ -103,33 +116,24 @@ class RSSWebScraper:
                 'Headline': "Error",
                 'Content': "Error"
             }
-
-    def scrape_all_urls(self):
-        """Scrapes all URLs from the DataFrame and stores the results."""
-        for idx, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Scraping URLs", unit="article"):
-            url = row['url']
-            source = row['source']
-            category = row['category']
-            print(f"Scraping URL: {url}")
-            data = self.scrape_url(url, source, category)
-            self.scraped_data.append(data)
-
-    def extract_df(self):
-        """Filters the DataFrame to only include articles published yesterday."""
-        # Filter for yesterday's articles
-        yesterday = datetime.now().date() - timedelta(days=1)
-        result_df = pd.DataFrame(self.scraped_data)
-        result_df['published_time'] = pd.to_datetime(result_df['published_time'], errors='coerce')
-        filtered_df = result_df[result_df['published_time'].dt.date == yesterday]
-
+        
+    @staticmethod
+    def filter_by_date(df):
+        # Replace invalid date entries with NaT
+        df['Date Published'] = pd.to_datetime(
+        df['Date Published'], 
+            errors='coerce',  # This will convert invalid dates to NaT
+            format='%Y-%m-%dT%H:%M:%S.%f%z'  # Adjust the format if necessary
+        )
+        
+        # Get today's date and subtract one day
+        today = datetime.now().date() - timedelta(days=1)
+        
+        # Filter articles published today, ignoring NaT
+        filtered_df = df[df['Date Published'].dt.date == today]
+        
         return filtered_df
 
-    def get_filtered_df(self):
-        """Fetch and scrape RSS data, then return the filtered DataFrame."""
-        self.fetch_rss_data()  # Fetch the RSS data
-        self.scrape_all_urls()  # Scrape all the URLs
-        return self.extract_df()  # Filter and return articles from yesterday
-    
     @staticmethod
     def convert_to_json(df, file_path):
         """
@@ -142,8 +146,8 @@ class RSSWebScraper:
             
             # Ensure Timestamp objects are converted to strings
             for record in data_dict:
-                if 'published_time' in record:
-                    record['published_time'] = record['published_time'].strftime('%Y-%m-%d %H:%M:%S')
+                if 'Date Published' in record:
+                    record['Date Published'] = record['Date Published'].strftime('%Y-%m-%d %H:%M:%S')
     
             # Save the dictionary as a JSON file
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -151,4 +155,4 @@ class RSSWebScraper:
     
             print(f"Data successfully saved to {file_path}")
         except Exception as e:
-            print(f"Failed to save data as JSON: {e}")
+            print(f"Failed to save data as JSON: {e}")  
