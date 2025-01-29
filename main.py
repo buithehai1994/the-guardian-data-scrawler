@@ -16,7 +16,7 @@ world_news = [
     ("https://www.theguardian.com/commentisfree/rss", "Opinion"),
     ("https://www.theguardian.com/uk/culture/rss", "Culture"),
     ("https://www.theguardian.com/travel/rss", "Travel"),
-    ("https://www.theguardian.com/food/rss", "Food")
+    ("https://www.theguardian.com/food/rss","Food")
 ]
 
 # Instantiate the scraper and get the filtered DataFrame
