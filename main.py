@@ -16,9 +16,30 @@ world_news = [
     ("https://www.theguardian.com/commentisfree/rss", "Opinion"),
     ("https://www.theguardian.com/uk/culture/rss", "Culture"),
     ("https://www.theguardian.com/travel/rss", "Travel"),
-    ("https://www.theguardian.com/food/rss","Food")
+    ("https://www.theguardian.com/food/rss", "Food")
 ]
 
 # Instantiate the scraper and get the filtered DataFrame
 scraper = RSSWebScraper(world_news)
-filtered_df = scraper.get_filtered_df()
+
+def main():
+    try:
+        # Define date
+        yesterday = datetime.now().date() - timedelta(days=1)
+        
+        # Create the DataFrame
+        filtered_df = scraper.get_filtered_df()
+        
+        # Save the filtered DataFrame as a JSON file to be pushed to GitHub
+        file_path = f'processed_files/bbc_articles_{yesterday}.json'
+        result_dict = filtered_articles.convert_to_json(df_filtered, file_path)
+
+        return result_dict  # Return the dictionary
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None  # Return None if an error occurs
+
+if __name__ == '__main__':
+    main()
+        
