@@ -33,12 +33,11 @@ def main():
 
         articles_data = []
         for _, row in tqdm(df.iterrows(), total=df.shape[0], desc="Scraping Articles", unit="article"):
-            rss_parser = RSSParser(row['url'], row['category'])
-            article_info = rss_parser.scrape_url(row['url'], row['category'])
+            article_info = rss_parser.scrape_url(row['url'], row['rss'], row['category'])
             articles_data.append(article_info)
         
         articles_df = pd.DataFrame(articles_data)
-        articles_df.drop(columns=['author'], errors='ignore', inplace=True)
+        articles_df = articles_df.drop(columns=['author'], errors='ignore')
 
         filtered_articles = RSSParser.filter_by_date(articles_df)
 
