@@ -15,11 +15,11 @@ class RSSWebScraper:
         rss_urls (list of tuples): List of RSS feed URLs and corresponding categories.
         """
         self.rss_urls = rss_urls
-        self.df = pd.DataFrame(columns=["url", "category"])  # Empty DataFrame to store article URLs and categories
+        self.df = pd.DataFrame(columns=["url", "source", "category"])  # Added category column
         self.scraped_data = []
 
     def fetch_rss_data(self):
-        """Fetch and parse all RSS feeds to extract article URLs and their corresponding categories."""
+        """Fetch and parse all RSS feeds to extract article URLs, sources, and categories."""
         for rss_url, category in tqdm(self.rss_urls, desc="Processing RSS Feeds", unit="feed"):
             response = requests.get(rss_url)
             if response.status_code == 200:
@@ -29,21 +29,22 @@ class RSSWebScraper:
                 for item in root.findall(".//item"):
                     link = item.find("link").text
                     if link:
-                        new_rows.append({"url": link, "category": category})
+                        new_rows.append({"url": link, "source": rss_url, "category": category})  # Store both source and category
                 # Concatenate new rows to the existing DataFrame
                 if new_rows:
                     self.df = pd.concat([self.df, pd.DataFrame(new_rows)], ignore_index=True)
             else:
                 print(f"Failed to fetch RSS feed from {rss_url}. Status code: {response.status_code}")
 
-    def scrape_url(self, url, category):
+    def scrape_url(self, url, source, category):
         """
         Scrapes a single webpage to extract title, meta description, 
         author, published time, headline, and main content.
 
         Args:
         url (str): The URL of the webpage to scrape.
-        category (str): The category to associate with the article.
+        source (str): The source of the article (full RSS link).
+        category (str): The category of the article (e.g., "UK", "World").
 
         Returns:
         dict: A dictionary with the extracted content.
@@ -79,35 +80,38 @@ class RSSWebScraper:
             # Return extracted data as a dictionary
             return {
                 'url': url,
-                'category': category,
+                'source': source,
+                'type': category,  # Include the category
                 'title': title,
-                'meta_description': meta_content,
-                'author': author_name,
-                'published_time': published_time,
-                'headline': headline,
-                'main_content': text_content
+                'description': meta_content,
+                'Author': author_name,
+                'Date Published': published_time,
+                'Headline': headline,
+                'Content': text_content
             }
 
         except Exception as e:
             print(f"Error scraping {url}: {e}")
             return {
                 'url': url,
-                'category': category,
+                'source': source,
+                'type': category,  # Include category even in error case
                 'title': "Error",
-                'meta_description': "Error",
+                'description': "Error",
                 'author': "Error",
-                'published_time': "Error",
-                'headline': "Error",
-                'main_content': "Error"
+                'Date Published': "Error",
+                'Headline': "Error",
+                'Content': "Error"
             }
 
     def scrape_all_urls(self):
         """Scrapes all URLs from the DataFrame and stores the results."""
         for idx, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Scraping URLs", unit="article"):
             url = row['url']
+            source = row['source']
             category = row['category']
             print(f"Scraping URL: {url}")
-            data = self.scrape_url(url, category)
+            data = self.scrape_url(url, source, category)
             self.scraped_data.append(data)
 
     def extract_df(self):
