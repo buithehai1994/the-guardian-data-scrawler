@@ -121,3 +121,26 @@ class RSSWebScraper:
         self.fetch_rss_data()  # Fetch the RSS data
         self.scrape_all_urls()  # Scrape all the URLs
         return self.extract_df()  # Filter and return articles from yesterday
+    
+    @staticmethod
+    def convert_to_json(df, file_path):
+        """
+        Save the dataframe as a JSON file.
+        :param file_path: Path to the output JSON file.
+        """
+        try:
+            # Convert dataframe to dictionary
+            data_dict = df.to_dict(orient='records')
+            
+            # Ensure Timestamp objects are converted to strings
+            for record in data_dict:
+                if 'published_time' in record:
+                    record['published_time'] = record['published_time'].strftime('%Y-%m-%d %H:%M:%S')
+    
+            # Save the dictionary as a JSON file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data_dict, f, ensure_ascii=False, indent=4)
+    
+            print(f"Data successfully saved to {file_path}")
+        except Exception as e:
+            print(f"Failed to save data as JSON: {e}")  
