@@ -4,6 +4,7 @@ import json
 import pandas as pd
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 
 class RSSParser:
     def __init__(self, rss_url, category):
