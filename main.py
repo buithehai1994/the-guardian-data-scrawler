@@ -65,6 +65,11 @@ def main():
         result_dict = filtered_articles.convert_to_json(filtered_articles, file_path)
         
         return result_dict  # Return the dictionary
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None  # Return None if an error occurs
+
 
 if __name__ == '__main__':
     main()
