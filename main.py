@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from tqdm import tqdm  # Import tqdm for the progress bar
 
-from functions.py import RSSWebScraper
+from functions import RSSWebScraper
 
 # List of RSS Feed URLs and their corresponding categories
 world_news = [
