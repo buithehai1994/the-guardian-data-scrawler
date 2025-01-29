@@ -36,13 +36,14 @@ class RSSWebScraper:
             else:
                 print(f"Failed to fetch RSS feed from {rss_url}. Status code: {response.status_code}")
 
-    def scrape_url(self, url):
+    def scrape_url(self, url, category):
         """
         Scrapes a single webpage to extract title, meta description, 
         author, published time, headline, and main content.
 
         Args:
         url (str): The URL of the webpage to scrape.
+        category (str): The category to associate with the article.
 
         Returns:
         dict: A dictionary with the extracted content.
@@ -65,11 +66,11 @@ class RSSWebScraper:
 
             # Extract published time
             meta_time_tag = soup.find('meta', property='article:published_time')
-            published_time = meta_time_tag.get('content', 'No time found')
+            published_time = meta_time_tag['content'] if meta_time_tag else "No time found"
 
             # Extract headline
             meta_headline_tag = soup.find('meta', property='og:description')
-            headline = meta_headline_tag.get('content', 'No headline found')
+            headline = meta_headline_tag['content'] if meta_headline_tag else "No headline found"
 
             # Extract main content
             main_content = soup.find('article')  # Find main content of article
@@ -78,6 +79,7 @@ class RSSWebScraper:
             # Return extracted data as a dictionary
             return {
                 'url': url,
+                'category': category,
                 'title': title,
                 'meta_description': meta_content,
                 'author': author_name,
@@ -90,6 +92,7 @@ class RSSWebScraper:
             print(f"Error scraping {url}: {e}")
             return {
                 'url': url,
+                'category': category,
                 'title': "Error",
                 'meta_description': "Error",
                 'author': "Error",
@@ -102,8 +105,9 @@ class RSSWebScraper:
         """Scrapes all URLs from the DataFrame and stores the results."""
         for idx, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Scraping URLs", unit="article"):
             url = row['url']
+            category = row['category']
             print(f"Scraping URL: {url}")
-            data = self.scrape_url(url)
+            data = self.scrape_url(url, category)
             self.scraped_data.append(data)
 
     def extract_df(self):
@@ -143,4 +147,4 @@ class RSSWebScraper:
     
             print(f"Data successfully saved to {file_path}")
         except Exception as e:
-            print(f"Failed to save data as JSON: {e}")  
+            print(f"Failed to save data as JSON: {e}")
